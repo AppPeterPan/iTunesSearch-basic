@@ -5,15 +5,39 @@ class StoreItemListTableViewController: UITableViewController {
     
     @IBOutlet var searchBar: UISearchBar!
     @IBOutlet var filterSegmentedControl: UISegmentedControl!
-        
+    
     var items = [StoreItem]()
     
     let queryOptions = ["movie", "music", "software", "ebook"]
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
     }
+    
+    func fetchItems(term: String, media: String, lang: String, limit: Int) {
+        
+        let url = URL(string: "https://itunes.apple.com/search?term=\(term)&media=\(media)&lang=\(lang)&limit=\(limit)")
+        
+        let task = URLSession.shared.dataTask(with: url!) { (data, response, error) in
+            if let _ = error {
+                
+            } else if let data = data {
+                do {
+                    let decoder = JSONDecoder()
+                    let searchResponse = try decoder.decode(SearchResponse.self, from: data)
+                    self.items = searchResponse.results
+                    DispatchQueue.main.async {
+                        self.tableView.reloadData()
+                    }
+                    
+                } catch {
+                    print(error)
+                }
+            }
+        }
+        task.resume()
+    }
+    
     
     func fetchMatchingItems() {
         
@@ -27,21 +51,12 @@ class StoreItemListTableViewController: UITableViewController {
             
             // use the item controller to fetch items
             
-            StoreItemController.shared.fetchItems(term: searchTerm, media: mediaType, lang: "en_us", limit: 20) { items in
-                if let items = items {
-                    self.items = items
-                    DispatchQueue.main.async {
-                        self.tableView.reloadData()
-                    }
-                }
-            }
+            fetchItems(term: searchTerm, media: mediaType, lang: "en_us", limit: 20)
         }
     }
     
     func configure(cell: ItemCell, forItemAt indexPath: IndexPath) {
-        
-      
-        
+    
         let item = items[indexPath.row]
         
         // set cell.titleLabel to the item's name
@@ -54,13 +69,18 @@ class StoreItemListTableViewController: UITableViewController {
         cell.itemImageView?.image = UIImage(systemName: "photo")//?.applyingSymbolConfiguration(.init(scale: .large))
         
         // initialize a network task to fetch the item's artwork
-        StoreItemController.shared.fetchImage(from: item.artworkURL) { image in
-            if let image = image {
+        
+        let task = URLSession.shared.dataTask(with: item.artworkURL) { (data, response, error) in
+            if let data = data,
+               let image = UIImage(data: data) {
                 DispatchQueue.main.async {
                     cell.itemImageView.image = image
                 }
-            }
+            } 
         }
+        task.resume()
+        
+        
     }
     
     @IBAction func filterOptionUpdated(_ sender: UISegmentedControl) {
@@ -69,17 +89,17 @@ class StoreItemListTableViewController: UITableViewController {
     }
     
     // MARK: - Table view data source
-
+    
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-
+        
         return items.count
     }
-
+    
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         
         let cell = tableView.dequeueReusableCell(withIdentifier: "Item", for: indexPath) as! ItemCell
         configure(cell: cell, forItemAt: indexPath)
-
+        
         return cell
     }
     
@@ -92,7 +112,7 @@ class StoreItemListTableViewController: UITableViewController {
 }
 
 extension StoreItemListTableViewController: UISearchBarDelegate {
-
+    
     func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
         
         fetchMatchingItems()
